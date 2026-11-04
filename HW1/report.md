@@ -104,6 +104,111 @@ Both implementations use the same float data type and perform the same element-w
 Therefore, the CPU and GPU implementations produce identical results for the tested inputs.
 
 ---
+# Question 2 – 2D Dense Matrix Multiplication
+
+Experiments were performed on a Tesla T4 GPU using Google Colab. The baseline implementation uses 2D blocks with dimensions $16 \times 16$ (256 threads per block).
+
+### 1. Floating-point operations and global memory reads
+
+Given matrix $A$ of dimension $(M \times N)$ and matrix $B$ of dimension $(N \times P)$, the output matrix $C = A \times B$ has dimension $(M \times P)$. Each element $C_{i,j}$ (where $0 \le i < M$ and $0 \le j < P$) is computed as the inner product of row $i$ of $A$ and column $j$ of $B$:
+
+$$
+C_{i,j} = \sum_{k=0}^{N-1} A_{i,k} \cdot B_{k,j}
+$$
+
+Inside the CUDA kernel (`matrixMulKernel`), each active thread computes one output element by executing a loop of $N$ iterations. During each iteration, the thread performs **1 floating-point multiplication** and **1 floating-point addition** (2 FLOPs per iteration). Thus, computing a single element requires $2N$ FLOPs. Across all $M \times P$ output elements, the total number of floating-point operations is:
+
+**Total FLOPs =** $2 \cdot M \cdot N \cdot P$
+
+For memory reads, in this baseline implementation (without shared-memory tiling), each thread reads one element from $A$ and one element from $B$ directly from global memory per loop iteration. This results in $2N$ global memory reads per thread. Across all active threads, the total number of reads is:
+
+**Total Global Memory Reads =** $2 \cdot M \cdot N \cdot P$
+
+*(Additionally, the kernel performs* $M \cdot P$ *global memory writes to store the final elements into* $C$*.)*
+
+### 2. Threads and blocks for A(128x256) and B(256x32)
+
+For $M = 128$, $N = 256$, and $P = 32$, the output matrix $C$ has dimensions $(M \times P) = (128 \times 32)$. With a 2D block size of $(16, 16)$, the number of blocks required for the grid is:
+
+$$
+\text{gridDim.x} = \left\lceil \frac{32}{16} \right\rceil = 2
+$$
+
+$$
+\text{gridDim.y} = \left\lceil \frac{128}{16} \right\rceil = 8
+$$
+
+The total number of blocks launched is $2 \times 8 = 16$.
+The total number of threads launched is $16 \times 256 = 4096$.
+*(Since 128 and 32 are exact multiples of 16, all 4,096 threads actively perform computation.)*
+
+The achieved occupancy was measured using Nsight Compute.
+
+**Achieved Occupancy = 24.75%.**
+
+**Explanation:** The Tesla T4 GPU (Compute Capability 7.5) has 40 Streaming Multiprocessors (SMs), each capable of supporting up to 1,024 active threads (32 warps). Since the entire grid consists of only 16 blocks, a maximum of 16 SMs receive 1 block (256 threads) each, leaving the remaining 24 SMs completely idle. On the active SMs, 256 threads out of the 1,024-thread maximum limits the theoretical per-SM occupancy to $25\%$, which closely aligns with the measured **24.75%**.
+
+*Figure 4. Nsight Compute output for A(128x256) and B(256x32).*
+
+### 3. Execution for A(1024x8191) and B(8191x8197)
+
+The program still runs correctly. However, because $N = 8191$ and $P = 8197$ are not multiples of the block dimension (16), two critical modifications are required in the codebase:
+
+1. **Ceiling Division for Grid Dimensions:** The grid dimensions must be computed as `gridDim.x = (P + blockDim.x - 1) / blockDim.x` to ensure sufficient blocks are launched to cover the remainder elements.
+
+2. **Boundary Check in the Kernel:** An explicit conditional guard (`if (row < M && col < P)`) is placed before the inner loop and global memory write to prevent out-of-bounds threads from accessing invalid memory addresses.
+
+**Threads and Blocks Calculation:**
+
+$$
+\text{gridDim.x} = \left\lceil \frac{8197}{16} \right\rceil = 513
+$$
+
+$$
+\text{gridDim.y} = \left\lceil \frac{1024}{16} \right\rceil = 64
+$$
+
+* **Total Thread Blocks Used:** $513 \times 64 = 32,832$ blocks.
+
+* **Total CUDA Threads Launched:** $32,832 \times 256 = 8,404,992$ threads.
+
+* **Active Computing Threads:** Only threads satisfying `row < 1024` and `col < 8197` execute the computation. This equals $1024 \times 8197 = \mathbf{8,393,728}$ active threads. *(The remaining 11,264 boundary threads are masked and remain idle.)*
+
+The achieved occupancy was measured using Nsight Compute.
+
+**Achieved Occupancy = 99.83%.**
+
+**Explanation:** With 32,832 blocks launched, every SM on the GPU is fully populated with the maximum resident blocks (4 blocks of 256 threads = 1,024 threads per SM) across multiple execution waves. This massive amount of parallelism allows the hardware warp schedulers to effectively hide memory latency, resulting in near-peak occupancy.
+
+*Figure 5. Nsight Compute output for A(1024x8191) and B(8191x8197).*
+
+### 4. Time breakdown for different matrix dimensions (double precision)
+
+Twelve square matrix dimensions ($M=N=P$) were tested. For each dimension, the average host-side time was recorded for copying data from host to device (H2D), executing the CUDA kernel, and copying results from device to host (D2H).
+
+*Figure 6. Mean H2D, kernel, and D2H times for 12 matrix dimensions (double precision).*
+
+**Main Observations:**
+
+1. **Transition from Transfer-Bound to Compute-Bound:** For small matrices (e.g., $128 \times 128$ to $512 \times 512$), PCIe data transfers (H2D + D2H) account for **64% to 68%** of the total execution time. However, as the matrix size grows, the computational workload rapidly dominates. By $4096 \times 4096$, the kernel execution takes **82.6%** of the total runtime.
+
+2. **Asymptotic Scaling:** This behavior highlights the difference in complexity scaling. Memory transfers scale quadratically ($\mathcal{O}(N^2)$ bytes), whereas the matrix multiplication kernel scales cubically ($\mathcal{O}(N^3)$ operations and memory reads). Therefore, as $N$ doubles (e.g., from 2048 to 4096), transfer times increase by a factor of $\sim 4$, while kernel time increases by a factor of $\sim 8.7$.
+
+### 5. Time breakdown for float precision and speedup analysis
+
+The data type was changed from `double` (FP64) to `float` (FP32), and the benchmark was rerun across the same dimensions.
+
+*Figure 7. Mean H2D, kernel, and D2H times for 12 matrix dimensions (float precision).*
+
+**Speedup Analysis:**
+
+1. **Data Transfer Speedup (**$\sim 1.8\times$ **to** $2.0\times$**):** Since `float` (4 bytes) is exactly half the size of `double` (8 bytes), the memory footprint is halved. For sufficiently large matrices (e.g., $4096 \times 4096$), H2D and D2H transfer times drop by nearly half, closely matching the ideal $2\times$ bandwidth speedup limit.
+
+2. **CUDA Kernel Speedup (**$\sim 2.1\times$ **to** $2.7\times$**):** At $4096 \times 4096$, the kernel execution time decreased from $676.36$ ms (`double`) to $311.38$ ms (`float`), yielding a practical speedup of roughly $2.17\times$.
+
+**Why an ideal compute speedup is not observed:**
+On an NVIDIA Tesla T4 GPU, the theoretical peak FP32-to-FP64 throughput ratio is 32:1. However, our naive 2D implementation lacks shared-memory tiling, meaning each thread must read 2 elements directly from global memory for every 2 FLOPs performed. Consequently, the kernel is severely **memory-bandwidth bound**. By halving the data size, the effective memory transfer rate is doubled, which yields the observed $\sim 2.2\times$ performance gain. The kernel cannot reach the $32\times$ architectural limit without optimizing global memory access patterns to improve cache locality.
+---
 
 # Question 3 – Quantum Fourier Transformation
 
