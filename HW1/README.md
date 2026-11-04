@@ -89,3 +89,95 @@ ncu --metrics sm__warps_active.avg.pct_of_peak_sustained_active ./matMul_double 
 For Q2.4 and Q2.5, a Python script inside the notebook drives the compiled executables (`matMul_double` and `matMul_float`), iterating through 12 square matrix sizes ($N=128$ to $N=4096$). It extracts the Host-to-Device (H2D), Kernel, and Device-to-Host (D2H) timings reported directly by the C++ program.
 
 To reproduce the charts, run the final code cell in the Colab notebook. This will execute the scaling sweeps, dump the data into the two `.csv` files, and generate the corresponding stacked bar `.png` charts. As with Q1, timing runs are strictly separated from `ncu` profiling runs to avoid overhead interference.
+
+# HW1 — Q3: Quantum Fourier Transformation
+
+## Files and saved evidence
+
+- [`HW1_Q3_Quantum Fourier Transformation.ipynb`](<HW1_Q3_Quantum Fourier Transformation.ipynb>): six-question analysis, original saved measurements, source mapping, and GUI screenshots.
+- [`qft_bench_naive.c`](qft_bench_naive.c): supplied naïve QFT benchmark; its algorithm and timing logic are unchanged.
+- `images/q3_5_24q_timeline.png`: 24-qubit GUI timeline and selected Hadamard kernel.
+- `images/q3_6_16q_timeline.png` and `images/q3_6_28q_timeline.png`: scaling screenshots.
+- `report.md`: existing group report. For Q3, distinguish its separate standalone 24-qubit timing from the notebook's profiled run; its CPU launch-duration claim and its use of a statistics average as a timeline duration still require reconciliation with the reviewed notebook.
+
+## Environment and build
+
+The saved experiment used a Tesla T4 (compute capability 7.5) in a Linux/Colab GPU runtime with QuEST's CUDA backend. Install CUDA, CMake, Nsight Systems CLI, and GNU `time` in that environment. Install the Nsight Systems desktop GUI on your own computer for report inspection. The notebook and image folder should remain together for relative image links.
+
+In Colab, upload the original `qft_bench_naive.c` to `/content/`, then run:
+
+```bash
+nvidia-smi --query-gpu=name,compute_cap --format=csv
+git clone https://github.com/QuEST-Kit/QuEST.git /content/QuEST
+cp /content/qft_bench_naive.c /content/QuEST/qft_bench_naive.c
+
+cmake -S /content/QuEST -B /content/QuEST/build \
+  -DQUEST_ENABLE_CUDA=ON \
+  -DCMAKE_CUDA_ARCHITECTURES=75 \
+  -DCMAKE_CUDA_FLAGS="-lineinfo" \
+  -DUSER_SOURCE_NAMES=qft_bench_naive.c \
+  -DUSER_OUTPUT_EXE_NAME=qft_naive
+cmake --build /content/QuEST/build -j4
+/content/QuEST/build/qft_naive 24 5
+```
+
+Clone only once; skip the clone when `/content/QuEST` already exists. Change `75` to match the GPU (the assignment specifies `90` for its school cluster). Explicit `-S` and `-B` resolve the working-directory issue recorded in the report. Confirm that output says **GPU backend** and total probability is close to 1. Normalization is only a sanity check.
+
+The original QuEST checkout SHA and CUDA/Nsight tool versions were not saved. The notebook contains an optional environment-record cell for future runs; record the commit and tool versions before repeating because upstream `main` can change. Use the course-compatible QuEST v4 revision when reproducing.
+
+## Q3.2 — Memory measurement
+
+Run the notebook's original 28-qubit memory cell without the profiler. It launches `/usr/bin/time -v` around the benchmark and polls `nvidia-smi --query-gpu=memory.used` until completion.
+
+| Measurement | Recorded value |
+|---|---:|
+| GPU baseline | 0 MiB |
+| Maximum observed GPU memory | 4203 MiB (4.1045 GiB) |
+| Process peak host RSS | 183492 KiB (179.19 MiB) |
+| Theoretical 28-qubit state vector | 4096 MiB (4 GiB) |
+
+The device sample is device-wide and may include other processes. The loop waits 100 ms plus query overhead, so it can miss brief peaks. RSS is host process memory, not device memory or machine-wide RAM. The excess 107 MiB on the device is consistent with runtime overhead and additional allocations, without assigning an exact cause to every byte.
+
+## Q3.3–Q3.4 — Profile and identify hotspots
+
+```bash
+cd /content/QuEST
+nsys profile --trace=cuda,osrt --stats=true -o qft_24q ./build/qft_naive 24 5
+nsys profile --trace=cuda,osrt --stats=true -o qft_16q ./build/qft_naive 16 5
+nsys profile --trace=cuda,osrt --stats=true -o qft_28q ./build/qft_naive 28 5
+```
+
+Use fresh output names when repeating to preserve existing reports. Profiling uses the unmodified benchmark and Nsight Systems only. Inspect `cuda_gpu_kern_sum`; default ns values must be converted when reporting ms or µs. The 24-qubit top three are:
+
+| Kernel base name | Gate | Total GPU time (ms) | Instances | Average (µs) |
+|---|---|---:|---:|---:|
+| `kernel_statevec_anyCtrlOneTargDiagMatr_sub<1>` | Controlled phase shift | 1891.753348 | 1656 | 1142.3631 |
+| `kernel_statevec_anyCtrlOneTargDenseMatr_subA<0>` | Hadamard | 335.207961 | 144 | 2327.8331 |
+| `kernel_statevec_anyCtrlSwap_subA<0>` | SWAP | 96.363784 | 72 | 1338.3859 |
+
+The phase kernel accounts for 80.8% of summed GPU kernel time in this capture. Counts include **one warm-up plus five timed QFTs**: 276×6 phase gates, 24×6 Hadamards, and 12×6 swaps. The notebook explains the mapping using [QuEST kernel definitions](https://github.com/QuEST-Kit/QuEST/blob/main/quest/src/gpu/gpu_kernels.cuh) and [API operations](https://github.com/QuEST-Kit/QuEST/blob/main/quest/src/api/operations.cpp).
+
+## Q3.5 — Inspect the CPU/GPU timeline
+
+Download the `.nsys-rep` files and open them in the desktop GUI. Expand the process/thread CUDA API row and GPU kernel rows. Skip the warm-up sequence, zoom into a timed QFT, select a gate kernel, and follow its correlation to **`cudaLaunchKernel`** on the launching CPU thread. `cudaDeviceSynchronize` waits for completion rather than launching a gate.
+
+The existing 24-qubit screenshot shows a Hadamard GPU duration of **2.303 ms**, thread **23889**, Correlation ID **806**, and launch latency **14.095 µs**. It does not show the matching CPU call duration. Capture that CPU event/details panel to finish the individual CPU/GPU evidence. CPU API duration, launch latency, and GPU execution duration are distinct quantities. Refer to the [Nsight Systems guide](https://docs.nvidia.com/nsight-systems/UserGuide/index.html) for GUI navigation.
+
+## Q3.6 — Scaling results
+
+| Qubits | Best / mean complete QFT (ms) | Selected kernel in supplied GUI screenshot | GUI duration |
+|---|---:|---|---:|
+| 16 | 1.741 / 1.911 | Hadamard | 13.728 µs |
+| 28 | 8177.909 / 8189.069 | Controlled phase shift | 18.048 ms |
+
+The screenshots select different gate types. For comparison of the same gate, the phase-kernel statistics averages are 6.9480 µs at 16 qubits and 18.1531318 ms at 28 qubits. These averages are separate from individual GUI measurements. The notebook includes both screenshots, all five printed repetition times, and their calculated sums.
+
+The benchmark's `best / mean` is per-QFT synchronized host elapsed time; initialization is outside that interval. Profiling totals additionally include warm-up and utility work. The separate, unprofiled 28-qubit memory run gave 8169.742 / 8185.428 ms, so keep it separate from the table above.
+
+## Remaining evidence and storage
+
+- Add the actual 24-qubit output screenshot as `images/q3_1_24q_output.png`; it is still missing. Saved profiler output already proves the GPU run succeeded, but does not replace the requested screenshot.
+- Capture the matched CPU `cudaLaunchKernel` event and, if needed, a view locating the selected timed repetition. Current images are short timeline crops.
+- Preserve the source revision, tool versions, memory logs from `/tmp/qft28_output.txt` and `/tmp/qft28_memory.txt`, and all three `.nsys-rep` files outside the temporary Colab runtime. Raw reports are not currently tracked here.
+
+This review used saved outputs and existing screenshots. The added setup/environment cells have not been executed in a fresh GPU runtime, and CUDA/Nsight experiments were not rerun locally.
