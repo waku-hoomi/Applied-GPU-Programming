@@ -34,3 +34,39 @@ ncu --set full --clock-control none -k convolution_1D_tiled -c 1 -o ncu_tiled ./
 ```
 
 Timings measured while ncu is attached include profiler overhead and should not be used as kernel times.
+
+## Bonus — Particle Simulation
+
+Build from the HW2 directory with `make`, `nvcc`, and a compatible `g++`. The recorded runs used a Tesla T4 with CUDA 13.0 and GCC 13.3. Use `sm_75` for a T4 and set `ARCH` to match the GPU on other machines.
+
+```bash
+cd iPIC3D-mini
+make -B ARCH=sm_75
+```
+
+Run the following from the same `iPIC3D-mini` directory. `GEM_2D` is the required case and `GEM_3D` is an additional experiment. Each CPU/GPU run uses the same executable and input for its case. Separate working directories keep the simulator's `./data/` outputs from overwriting one another.
+
+```bash
+(
+    set -euo pipefail
+    project="$PWD"
+    mkdir -p bonus_runs
+    results=$(mktemp -d "$project/bonus_runs/run.XXXXXXXX")
+    for case in GEM_2D GEM_3D; do
+        for mode in cpu gpu; do
+            run="$results/$case/$mode"
+            mkdir -p "$run/data"
+            (
+                cd "$run"
+                MINIPIC_MOVER="$mode" "$project/bin/miniPIC.out" \
+                    "$project/inputfiles/$case.inp" 2>&1 | tee simulation.log
+            )
+        done
+    done
+    printf 'Results directory: %s\n' "$results"
+)
+```
+
+Compare the CPU and GPU `data/rho_net_10.vtk` files for each case. Compute mover speedup as CPU `Mover Time / Cycle` divided by GPU `Mover Time / Cycle` in the simulation logs. Compute overall speedup using `Tot. Simulation Time` in the same way.
+
+For an automated run and comparison, open the [experiment notebook](iPIC3D-mini/HW2_Bonus_A%20Particle%20Simulation%20Application.ipynb) with its kernel working directory set to `iPIC3D-mini` and run all cells. It saves the logs, VTK files, and a `summary.json` with maximum absolute error, RMSE, and speedups under `bonus_runs/`.
