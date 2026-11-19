@@ -37,6 +37,10 @@ Timings measured while ncu is attached include profiler overhead and should not 
 
 ## Bonus — Particle Simulation
 
+- [Bonus report](iPIC3D-mini/Bonus.md) describes the GPU implementation and presents the correctness and timing results.
+- [Experiment notebook](iPIC3D-mini/HW2_Bonus_A%20Particle%20Simulation%20Application.ipynb) builds and runs the CPU/GPU comparisons.
+- The build generates `iPIC3D-mini/bin/miniPIC.out` for both CPU and GPU modes.
+
 Build from the HW2 directory with `make`, `nvcc`, and a compatible `g++`. The recorded runs used a Tesla T4 with CUDA 13.0 and GCC 13.3. Use `sm_75` for a T4 and set `ARCH` to match the GPU on other machines.
 
 ```bash
