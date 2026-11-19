@@ -1,1029 +1,429 @@
-#include "BC.h"
+#include <math.h>
+#include "Basic.h"
 
-//////////
-// POPULATE GHOST CELL ON NODES
-//////////
+/** method to calculate the parallel dot product with vect1, vect2 having the ghost cells*/
+double dotP(FPfield *vect1, FPfield *vect2, int n) {
+  double result = 0;
+  double local_result = 0;
+  for (register int i = 0; i < n; i++)
+    local_result += vect1[i] * vect2[i];
+  result = local_result;
+  return (result);
 
-
-/** Apply BC to scalar interp quantity defined on nodes - Interpolation quantity */
-void applyBCscalarDensN(FPinterp*** scalarN, grid* grd, parameters* param){
-    
-    ///////////////////////
-    ///
-    ///    FACE
-    ///
-    
-    
-    // X direction
-    if (param->PERIODICX==true){
-        for (register int j = 1; j < grd->nyn-1; j++)
-            for (register int k = 1; k < grd->nzn-1; k++){
-                scalarN[0][j][k] = scalarN[grd->nxn-3][j][k];
-                scalarN[grd->nxn-1][j][k] = scalarN[2][j][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Y direction
-    if (param->PERIODICY==true){
-        for (register int i = 1; i < grd->nxn - 1; i++)
-            for (register int k = 1; k < grd->nzn - 1; k++){
-                
-                // rhon
-                scalarN[i][0][k] = scalarN[i][grd->nyn-3][k];
-                scalarN[i][grd->nyn-1][k] = scalarN[i][2][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Z direction
-    if (param->PERIODICZ==true){
-        for (register int i = 1; i < grd->nxn - 1; i++)
-            for (register int j = 1; j < grd->nyn - 1; j++){
-                
-                // rhon
-                scalarN[i][j][0] = scalarN[i][j][grd->nzn-3];
-                scalarN[i][j][grd->nzn-1] = scalarN[i][j][2];
-                
-            }
-    }
-    
-    ///////////////////////
-    ///
-    ///    EDGES
-    ///
-    
-    // X-EDGE
-    if (param->PERIODICY==true || param->PERIODICZ== true){
-        for(register int i=1; i < (grd->nxn - 1); i++){
-            scalarN[i][grd->nyn-1][grd->nzn-1] = scalarN[i][2][2];
-            scalarN[i][0][0]       = scalarN[i][grd->nyn-3][grd->nzn-3];
-            scalarN[i][0][grd->nzn-1]    = scalarN[i][grd->nyn-3][2];
-            scalarN[i][grd->nyn-1][0]    = scalarN[i][2][grd->nzn-3];
-        }
-    }
-    
-    // Y-EDGE
-    if (param->PERIODICX==true || param->PERIODICZ== true){
-        for(register int i=1; i < (grd->nyn - 1); i++){
-            scalarN[grd->nxn-1][i][grd->nzn-1] = scalarN[2][i][2];
-            scalarN[0][i][0]       =  scalarN[grd->nxn-3][i][grd->nzn-3];
-            scalarN[0][i][grd->nzn-1]   = scalarN[grd->nxn-3][i][2];
-            scalarN[grd->nxn-1][i][0] = scalarN[2][i][grd->nzn-3];
-        }
-    }
-    
-    // Z-EDGE
-    if (param->PERIODICX==true || param->PERIODICY== true){
-        for(register int i=1; i < (grd->nzn - 1); i++){
-            scalarN[grd->nxn-1][grd->nyn-1][i] = scalarN[2][2][i];
-            scalarN[0][0][i]       = scalarN[grd->nxn-3][grd->nyn-3][i];
-            scalarN[grd->nxn-1][0][i]  = scalarN[2][grd->nyn-3][i];
-            scalarN[0][grd->nyn-1][i]  = scalarN[grd->nxn-3][2][i];
-        }
-    }
-    
-    
-    // Corners
-    if (param->PERIODICX==true || param->PERIODICY==true || param->PERIODICZ==true){
-        
-        scalarN[grd->nxn-1][grd->nyn-1][grd->nzn-1]     = scalarN[2][2][2];
-        scalarN[0][grd->nyn-1][grd->nzn-1]              = scalarN[grd->nxn-3][2][2];
-        scalarN[grd->nxn-1][0][grd->nzn-1]              = scalarN[2][grd->nyn-3][2];
-        scalarN[0][0][grd->nzn-1]                       = scalarN[grd->nxn-3][grd->nyn-3][2];
-        scalarN[grd->nxn-1][grd->nyn-1][0]              = scalarN[2][2][grd->nzn-3];
-        scalarN[0][grd->nyn-1][0]                       = scalarN[grd->nxn-3][2][grd->nzn-3];
-        scalarN[grd->nxn-1][0][0]                       = scalarN[2][grd->nyn-3][grd->nzn-3];
-        scalarN[0][0][0]                                = scalarN[grd->nxn-3][grd->nyn-3][grd->nzn-3];
-        
-    }
-    
-    // FACE NON PERIODIC
-    // X direction
-    if (param->PERIODICX==false){
-        for (register int j = 1; j < grd->nyn-1; j++)
-            for (register int k = 1; k < grd->nzn-1; k++){
-                scalarN[0][j][k] = scalarN[1][j][k];
-                scalarN[grd->nxn-1][j][k] = scalarN[grd->nxn-2][j][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Y direction
-    if (param->PERIODICY==false){
-        for (register int i = 1; i < grd->nxn - 1; i++)
-            for (register int k = 1; k < grd->nzn - 1; k++){
-                scalarN[i][0][k] = scalarN[i][1][k] ;
-                scalarN[i][grd->nyn-1][k] = scalarN[i][grd->nyn-2][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Z direction
-    if (param->PERIODICZ==false){
-        for (register int i = 1; i < grd->nxn - 1; i++)
-            for (register int j = 1; j < grd->nyn - 1; j++){
-                scalarN[i][j][0] = scalarN[i][j][1] ;
-                scalarN[i][j][grd->nzn-1] = scalarN[i][j][grd->nzn-2];
-            }
-    }
 }
-
-/** Apply BC to scalar interp quantity defined on nodes - Interpolation quantity */
-void applyBCscalarFieldN(FPfield*** scalarN, grid* grd, parameters* param){
-    
-    
-    ///////////////////////
-    ///
-    ///    FACE
-    ///
-    
-    
-    // X direction
-    if (param->PERIODICX==true){
-        for (register int j = 1; j < grd->nyn-1; j++)
-            for (register int k = 1; k < grd->nzn-1; k++){
-                scalarN[0][j][k] = scalarN[grd->nxn-3][j][k];
-                scalarN[grd->nxn-1][j][k] = scalarN[2][j][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Y direction
-    if (param->PERIODICY==true){
-        for (register int i = 1; i < grd->nxn - 1; i++)
-            for (register int k = 1; k < grd->nzn - 1; k++){
-                
-                // rhon
-                scalarN[i][0][k] = scalarN[i][grd->nyn-3][k];
-                scalarN[i][grd->nyn-1][k] = scalarN[i][2][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Z direction
-    if (param->PERIODICZ==true){
-        for (register int i = 1; i < grd->nxn - 1; i++)
-            for (register int j = 1; j < grd->nyn - 1; j++){
-                
-                // rhon
-                scalarN[i][j][0] = scalarN[i][j][grd->nzn-3];
-                scalarN[i][j][grd->nzn-1] = scalarN[i][j][2];
-                
-            }
-    }
-    
-    ///////////////////////
-    ///
-    ///    EDGES
-    ///
-    
-    // X-EDGE
-    if (param->PERIODICY==true || param->PERIODICZ== true){
-        for(register int i=1; i < (grd->nxn - 1); i++){
-            scalarN[i][grd->nyn-1][grd->nzn-1] = scalarN[i][2][2];
-            scalarN[i][0][0]       = scalarN[i][grd->nyn-3][grd->nzn-3];
-            scalarN[i][0][grd->nzn-1]    = scalarN[i][grd->nyn-3][2];
-            scalarN[i][grd->nyn-1][0]    = scalarN[i][2][grd->nzn-3];
-        }
-    }
-    
-    // Y-EDGE
-    if (param->PERIODICX==true || param->PERIODICZ== true){
-        for(register int i=1; i < (grd->nyn - 1); i++){
-            scalarN[grd->nxn-1][i][grd->nzn-1] = scalarN[2][i][2];
-            scalarN[0][i][0]       =  scalarN[grd->nxn-3][i][grd->nzn-3];
-            scalarN[0][i][grd->nzn-1]   = scalarN[grd->nxn-3][i][2];
-            scalarN[grd->nxn-1][i][0] = scalarN[2][i][grd->nzn-3];
-        }
-    }
-    
-    // Z-EDGE
-    if (param->PERIODICX==true || param->PERIODICY== true){
-        for(register int i=1; i < (grd->nzn - 1); i++){
-            scalarN[grd->nxn-1][grd->nyn-1][i] = scalarN[2][2][i];
-            scalarN[0][0][i]       = scalarN[grd->nxn-3][grd->nyn-3][i];
-            scalarN[grd->nxn-1][0][i]  = scalarN[2][grd->nyn-3][i];
-            scalarN[0][grd->nyn-1][i]  = scalarN[grd->nxn-3][2][i];
-        }
-    }
-    
-    
-    // Corners
-    if (param->PERIODICX==true || param->PERIODICY==true || param->PERIODICZ==true){
-        
-        scalarN[grd->nxn-1][grd->nyn-1][grd->nzn-1]     = scalarN[2][2][2];
-        scalarN[0][grd->nyn-1][grd->nzn-1]              = scalarN[grd->nxn-3][2][2];
-        scalarN[grd->nxn-1][0][grd->nzn-1]              = scalarN[2][grd->nyn-3][2];
-        scalarN[0][0][grd->nzn-1]                       = scalarN[grd->nxn-3][grd->nyn-3][2];
-        scalarN[grd->nxn-1][grd->nyn-1][0]              = scalarN[2][2][grd->nzn-3];
-        scalarN[0][grd->nyn-1][0]                       = scalarN[grd->nxn-3][2][grd->nzn-3];
-        scalarN[grd->nxn-1][0][0]                       = scalarN[2][grd->nyn-3][grd->nzn-3];
-        scalarN[0][0][0]                                = scalarN[grd->nxn-3][grd->nyn-3][grd->nzn-3];
-        
-    }
-    
-    // FACE NON PERIODIC
-    // X direction
-    if (param->PERIODICX==false){
-        for (register int j = 1; j < grd->nyn-1; j++)
-            for (register int k = 1; k < grd->nzn-1; k++){
-                scalarN[0][j][k] = scalarN[1][j][k];
-                scalarN[grd->nxn-1][j][k] = scalarN[grd->nxn-2][j][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Y direction
-    if (param->PERIODICY==false){
-        for (register int i = 1; i < grd->nxn - 1; i++)
-            for (register int k = 1; k < grd->nzn - 1; k++){
-                scalarN[i][0][k] = scalarN[i][1][k] ;
-                scalarN[i][grd->nyn-1][k] = scalarN[i][grd->nyn-2][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Z direction
-    if (param->PERIODICZ==false){
-        for (register int i = 1; i < grd->nxn - 1; i++)
-            for (register int j = 1; j < grd->nyn - 1; j++){
-                scalarN[i][j][0] = scalarN[i][j][1] ;
-                scalarN[i][j][grd->nzn-1] = scalarN[i][j][grd->nzn-2];
-            }
-    }
+/** method to calculate dot product */
+double dot(FPfield *vect1, FPfield *vect2, int n) {
+  double result = 0;
+  for (int i = 0; i < n; i++)
+    result += vect1[i] * vect2[i];
+  return (result);
 }
-
-
-///////// USE THIS TO IMPOSE BC TO ELECTRIC FIELD
-///////// NOW THIS IS FIXED TO ZERO
-
-/** Apply BC to scalar interp quantity defined on nodes - Interpolation quantity */
-void applyBCscalarFieldNzero(FPfield*** scalarN, grid* grd, parameters* param){
-    
-    
-    ///////////////////////
-    ///
-    ///    FACE
-    ///
-    
-    
-    // X direction
-    if (param->PERIODICX==true){
-        for (register int j = 1; j < grd->nyn-1; j++)
-            for (register int k = 1; k < grd->nzn-1; k++){
-                scalarN[0][j][k] = scalarN[grd->nxn-3][j][k];
-                scalarN[grd->nxn-1][j][k] = scalarN[2][j][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Y direction
-    if (param->PERIODICY==true){
-        for (register int i = 1; i < grd->nxn - 1; i++)
-            for (register int k = 1; k < grd->nzn - 1; k++){
-                
-                // rhon
-                scalarN[i][0][k] = scalarN[i][grd->nyn-3][k];
-                scalarN[i][grd->nyn-1][k] = scalarN[i][2][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Z direction
-    if (param->PERIODICZ==true){
-        for (register int i = 1; i < grd->nxn - 1; i++)
-            for (register int j = 1; j < grd->nyn - 1; j++){
-                
-                // rhon
-                scalarN[i][j][0] = scalarN[i][j][grd->nzn-3];
-                scalarN[i][j][grd->nzn-1] = scalarN[i][j][2];
-                
-            }
-    }
-    
-    ///////////////////////
-    ///
-    ///    EDGES
-    ///
-    
-    // X-EDGE
-    if (param->PERIODICY==true || param->PERIODICZ== true){
-        for(register int i=1; i < (grd->nxn - 1); i++){
-            scalarN[i][grd->nyn-1][grd->nzn-1] = scalarN[i][2][2];
-            scalarN[i][0][0]       = scalarN[i][grd->nyn-3][grd->nzn-3];
-            scalarN[i][0][grd->nzn-1]    = scalarN[i][grd->nyn-3][2];
-            scalarN[i][grd->nyn-1][0]    = scalarN[i][2][grd->nzn-3];
-        }
-    }
-    
-    // Y-EDGE
-    if (param->PERIODICX==true || param->PERIODICZ== true){
-        for(register int i=1; i < (grd->nyn - 1); i++){
-            scalarN[grd->nxn-1][i][grd->nzn-1] = scalarN[2][i][2];
-            scalarN[0][i][0]       =  scalarN[grd->nxn-3][i][grd->nzn-3];
-            scalarN[0][i][grd->nzn-1]   = scalarN[grd->nxn-3][i][2];
-            scalarN[grd->nxn-1][i][0] = scalarN[2][i][grd->nzn-3];
-        }
-    }
-    
-    // Z-EDGE
-    if (param->PERIODICX==true || param->PERIODICY== true){
-        for(register int i=1; i < (grd->nzn - 1); i++){
-            scalarN[grd->nxn-1][grd->nyn-1][i] = scalarN[2][2][i];
-            scalarN[0][0][i]       = scalarN[grd->nxn-3][grd->nyn-3][i];
-            scalarN[grd->nxn-1][0][i]  = scalarN[2][grd->nyn-3][i];
-            scalarN[0][grd->nyn-1][i]  = scalarN[grd->nxn-3][2][i];
-        }
-    }
-    
-    
-    // Corners
-    if (param->PERIODICX==true || param->PERIODICY==true || param->PERIODICZ==true){
-        
-        scalarN[grd->nxn-1][grd->nyn-1][grd->nzn-1]     = scalarN[2][2][2];
-        scalarN[0][grd->nyn-1][grd->nzn-1]              = scalarN[grd->nxn-3][2][2];
-        scalarN[grd->nxn-1][0][grd->nzn-1]              = scalarN[2][grd->nyn-3][2];
-        scalarN[0][0][grd->nzn-1]                       = scalarN[grd->nxn-3][grd->nyn-3][2];
-        scalarN[grd->nxn-1][grd->nyn-1][0]              = scalarN[2][2][grd->nzn-3];
-        scalarN[0][grd->nyn-1][0]                       = scalarN[grd->nxn-3][2][grd->nzn-3];
-        scalarN[grd->nxn-1][0][0]                       = scalarN[2][grd->nyn-3][grd->nzn-3];
-        scalarN[0][0][0]                                = scalarN[grd->nxn-3][grd->nyn-3][grd->nzn-3];
-        
-    }
-    
-    // FACE NON PERIODIC
-    // X direction
-    if (param->PERIODICX==false){
-        for (register int j = 1; j < grd->nyn-1; j++)
-            for (register int k = 1; k < grd->nzn-1; k++){
-                scalarN[0][j][k] = 0.0;
-                scalarN[grd->nxn-1][j][k] = 0.0;
-            }
-    }
-    
-    // Periodic boundary conditions in Y direction
-    if (param->PERIODICY==false){
-        for (register int i = 1; i < grd->nxn - 1; i++)
-            for (register int k = 1; k < grd->nzn - 1; k++){
-                scalarN[i][0][k] = 0.0 ;
-                scalarN[i][grd->nyn-1][k] = 0.0;
-            }
-    }
-    
-    // Periodic boundary conditions in Z direction
-    if (param->PERIODICZ==false){
-        for (register int i = 1; i < grd->nxn - 1; i++)
-            for (register int j = 1; j < grd->nyn - 1; j++){
-                scalarN[i][j][0] = 0.0 ;
-                scalarN[i][j][grd->nzn-1] = 0.0;
-            }
-    }
+/** method to calculate the square norm of a vector */
+double norm2(FPfield **vect, int nx, int ny) {
+  double result = 0;
+  for (int i = 0; i < nx; i++)
+    for (int j = 0; j < ny; j++)
+      result += vect[i][j] * vect[i][j];
+  return (result);
 }
-
-
-///////////////
-////
-////    add Densities
-////
-////
-///////////////
-
-// apply boundary conditions to species interpolated densities
-void applyBCids(struct interpDensSpecies* ids, struct grid* grd, struct parameters* param){
-    
-    /////////////////(///
-    // apply BC on X
-    /////
-    
-    
-    // X direction
-    if (param->PERIODICX==true){
-        for (register int j = 1; j < grd->nyn-1; j++)
-            for (register int k = 1; k < grd->nzn-1; k++){
-                // rhon
-                ids->rhon[1][j][k] += ids->rhon[grd->nxn-2][j][k];
-                ids->rhon[grd->nxn-2][j][k] = ids->rhon[1][j][k]; // second is = not +=
-                
-                // Jx
-                ids->Jx[1][j][k] += ids->Jx[grd->nxn-2][j][k];
-                ids->Jx[grd->nxn-2][j][k] = ids->Jx[1][j][k]; // second is = not +=
-                // Jy
-                ids->Jy[1][j][k] += ids->Jy[grd->nxn-2][j][k];
-                ids->Jy[grd->nxn-2][j][k] = ids->Jy[1][j][k]; // second is = not +=
-                // Jz
-                ids->Jz[1][j][k] += ids->Jz[grd->nxn-2][j][k];
-                ids->Jz[grd->nxn-2][j][k] = ids->Jz[1][j][k]; // second is = not +=
-                
-                // pxx
-                ids->pxx[1][j][k] += ids->pxx[grd->nxn-2][j][k];
-                ids->pxx[grd->nxn-2][j][k] = ids->pxx[1][j][k]; // second is = not +=
-                // pxy
-                ids->pxy[1][j][k] += ids->pxy[grd->nxn-2][j][k];
-                ids->pxy[grd->nxn-2][j][k] = ids->pxy[1][j][k]; // second is = not +=
-                // pxz
-                ids->pxz[1][j][k] += ids->pxz[grd->nxn-2][j][k];
-                ids->pxz[grd->nxn-2][j][k] = ids->pxz[1][j][k]; // second is = not +=
-                
-                // pyy
-                ids->pyy[1][j][k] += ids->pyy[grd->nxn-2][j][k];
-                ids->pyy[grd->nxn-2][j][k] = ids->pyy[1][j][k]; // second is = not +=
-                // pyz
-                ids->pyz[1][j][k] += ids->pyz[grd->nxn-2][j][k];
-                ids->pyz[grd->nxn-2][j][k] = ids->pyz[1][j][k]; // second is = not +=
-                // pzz
-                ids->pzz[1][j][k] += ids->pzz[grd->nxn-2][j][k];
-                ids->pzz[grd->nxn-2][j][k] = ids->pzz[1][j][k]; // second is = not +=
-                
-            } // end of loop over the grid
-    } // end of periodic in X direction
-    
-    
-    // Periodic boundary conditions in Y direction
-    if (param->PERIODICY==true){
-        for (register int i = 1; i < grd->nxn - 1; i++)
-            for (register int k = 1; k < grd->nzn - 1; k++){
-                
-                // rhon
-                ids->rhon[i][1][k] += ids->rhon[i][grd->nyn-2][k];
-                ids->rhon[i][grd->nyn-2][k] = ids->rhon[i][1][k]; // second is = not +=
-                
-                // Jx
-                ids->Jx[i][1][k] += ids->Jx[i][grd->nyn-2][k];
-                ids->Jx[i][grd->nyn-2][k] = ids->Jx[i][1][k]; // second is = not +=
-                // Jy
-                ids->Jy[i][1][k] += ids->Jy[i][grd->nyn-2][k];
-                ids->Jy[i][grd->nyn-2][k] = ids->Jy[i][1][k]; // second is = not +=
-                // Jz
-                ids->Jz[i][1][k] += ids->Jz[i][grd->nyn-2][k];
-                ids->Jz[i][grd->nyn-2][k] = ids->Jz[i][1][k]; // second is = not +=
-                
-                // pxx
-                ids->pxx[i][1][k] += ids->pxx[i][grd->nyn-2][k];
-                ids->pxx[i][grd->nyn-2][k] = ids->pxx[i][1][k]; // second is = not +=
-                // pxy
-                ids->pxy[i][1][k] += ids->pxy[i][grd->nyn-2][k];
-                ids->pxy[i][grd->nyn-2][k] = ids->pxy[i][1][k]; // second is = not +=
-                // pxz
-                ids->pxz[i][1][k] += ids->pxz[i][grd->nyn-2][k];
-                ids->pxz[i][grd->nyn-2][k] = ids->pxz[i][1][k]; // second is = not +=
-                
-                // pyy
-                ids->pyy[i][1][k] += ids->pyy[i][grd->nyn-2][k];
-                ids->pyy[i][grd->nyn-2][k] = ids->pyy[i][1][k]; // second is = not +=
-                // pyz
-                ids->pyz[i][1][k] += ids->pyz[i][grd->nyn-2][k];
-                ids->pyz[i][grd->nyn-2][k] = ids->pyz[i][1][k]; // second is = not +=
-                // pzz
-                ids->pzz[i][1][k] += ids->pzz[i][grd->nyn-2][k];
-                ids->pzz[i][grd->nyn-2][k] = ids->pzz[i][1][k]; // second is = not +=
-                
-            } // end of loop
-        
-    } // end of PERIODICY
-    
-    
-    // Periodic boundary conditions in Z direction
-    if (param->PERIODICZ==true){
-        for (register int i = 1; i < grd->nxn - 1; i++)
-            for (register int j = 1; j < grd->nyn - 1; j++){
-                
-                // rhon
-                ids->rhon[i][j][1] += ids->rhon[i][j][grd->nzn-2];
-                ids->rhon[i][j][grd->nzn-2] = ids->rhon[i][j][1]; // second is = not +=
-                
-                // Jx
-                ids->Jx[i][j][1] += ids->Jx[i][j][grd->nzn-2];
-                ids->Jx[i][j][grd->nzn-2] = ids->Jx[i][j][1]; // second is = not +=
-                // Jy
-                ids->Jy[i][j][1] += ids->Jy[i][j][grd->nzn-2];
-                ids->Jy[i][j][grd->nzn-2] = ids->Jy[i][j][1]; // second is = not +=
-                // Jz
-                ids->Jz[i][j][1] += ids->Jz[i][j][grd->nzn-2];
-                ids->Jz[i][j][grd->nzn-2] = ids->Jz[i][j][1]; // second is = not +=
-                
-                // pxx
-                ids->pxx[i][j][1] += ids->pxx[i][j][grd->nzn-2];
-                ids->pxx[i][j][grd->nzn-2] = ids->pxx[i][j][1]; // second is = not +=
-                // pxy
-                ids->pxy[i][j][1] += ids->pxy[i][j][grd->nzn-2];
-                ids->pxy[i][j][grd->nzn-2] = ids->pxy[i][j][1]; // second is = not +=
-                // pxz
-                ids->pxz[i][j][1] += ids->pxz[i][j][grd->nzn-2];
-                ids->pxz[i][j][grd->nzn-2] = ids->pxz[i][j][1]; // second is = not +=
-                // pyy
-                ids->pyy[i][j][1] += ids->pyy[i][j][grd->nzn-2];
-                ids->pyy[i][j][grd->nzn-2] = ids->pyy[i][j][1]; // second is = not +=
-                // pyz
-                ids->pyz[i][j][1] += ids->pyz[i][j][grd->nzn-2];
-                ids->pyz[i][j][grd->nzn-2] = ids->pyz[i][j][1]; // second is = not +=
-                // pzz
-                ids->pzz[i][j][1] += ids->pzz[i][j][grd->nzn-2];
-                ids->pzz[i][j][grd->nzn-2] = ids->pzz[i][j][1]; // second is = not +=
-                
-                
-            }
-    }
-    
-    
-    
-    // apply BC if BC are not periodic
-    // X direction
-    if (param->PERIODICX==false){
-        for (register int j = 1; j < grd->nyn-1; j++)
-            for (register int k = 1; k < grd->nzn-1; k++){
-                // rhon
-                ids->rhon[1][j][k] *=2;
-                ids->rhon[grd->nxn-2][j][k] *=2; // second is = not +=
-                
-                // Jx
-                ids->Jx[1][j][k] *=2;
-                ids->Jx[grd->nxn-2][j][k] *=2;
-                // Jy
-                ids->Jy[1][j][k] *=2;
-                ids->Jy[grd->nxn-2][j][k] *=2;
-                // Jz
-                ids->Jz[1][j][k] *=2;
-                ids->Jz[grd->nxn-2][j][k] *=2;
-                
-                // pxx
-                ids->pxx[1][j][k] *=2;
-                ids->pxx[grd->nxn-2][j][k] *=2;
-                // pxy
-                ids->pxy[1][j][k] *=2;
-                ids->pxy[grd->nxn-2][j][k] *=2;
-                // pxz
-                ids->pxz[1][j][k] *=2;
-                ids->pxz[grd->nxn-2][j][k] *=2;
-                
-                // pyy
-                ids->pyy[1][j][k] *=2;
-                ids->pyy[grd->nxn-2][j][k] *=2;
-                // pyz
-                ids->pyz[1][j][k] *=2;
-                ids->pyz[grd->nxn-2][j][k] *=2;
-                // pzz
-                ids->pzz[1][j][k] *=2;
-                ids->pzz[grd->nxn-2][j][k] *=2;
-                
-            } // end of loop over the grid
-    } // end of not periodic in X direction
-    
-    
-    // Periodic boundary conditions in Y direction
-    if (param->PERIODICY==false){
-        for (register int i = 1; i < grd->nxn - 1; i++)
-            for (register int k = 1; k < grd->nzn - 1; k++){
-                
-                // rhon
-                ids->rhon[i][1][k] *=2 ;
-                ids->rhon[i][grd->nyn-2][k] *=2 ;
-                
-                // Jx
-                ids->Jx[i][1][k] *=2 ;
-                ids->Jx[i][grd->nyn-2][k] *=2;
-                // Jy
-                ids->Jy[i][1][k] *=2;
-                ids->Jy[i][grd->nyn-2][k] *=2;
-                // Jz
-                ids->Jz[i][1][k] *=2;
-                ids->Jz[i][grd->nyn-2][k] *=2;
-                
-                // pxx
-                ids->pxx[i][1][k] *=2;
-                ids->pxx[i][grd->nyn-2][k] *=2;
-                // pxy
-                ids->pxy[i][1][k] *=2;
-                ids->pxy[i][grd->nyn-2][k] *=2;
-                // pxz
-                ids->pxz[i][1][k] *=2;
-                ids->pxz[i][grd->nyn-2][k] *=2;
-                
-                // pyy
-                ids->pyy[i][1][k] *=2;
-                ids->pyy[i][grd->nyn-2][k] *=2;
-                // pyz
-                ids->pyz[i][1][k] *=2;
-                ids->pyz[i][grd->nyn-2][k] *=2;
-                // pzz
-                ids->pzz[i][1][k] *=2;
-                ids->pzz[i][grd->nyn-2][k] *=2;
-                
-            } // end of loop
-        
-    } // end of non PERIODICY
-    
-    
-    // Periodic boundary conditions in Z direction
-    if (param->PERIODICZ==false){
-        for (register int i = 1; i < grd->nxn - 1; i++)
-            for (register int j = 1; j < grd->nyn - 1; j++){
-                
-                // rhon
-                ids->rhon[i][j][1] *=2;
-                ids->rhon[i][j][grd->nzn-2] *=2;
-                
-                // Jx
-                ids->Jx[i][j][1] *=2;
-                ids->Jx[i][j][grd->nzn-2] *=2;
-                // Jy
-                ids->Jy[i][j][1] *=2;
-                ids->Jy[i][j][grd->nzn-2] *=2;
-                // Jz
-                ids->Jz[i][j][1] *=2;
-                ids->Jz[i][j][grd->nzn-2] *=2;
-                
-                // pxx
-                ids->pxx[i][j][1] *=2;
-                ids->pxx[i][j][grd->nzn-2] *=2;
-                // pxy
-                ids->pxy[i][j][1] *=2;
-                ids->pxy[i][j][grd->nzn-2] *=2;
-                // pxz
-                ids->pxz[i][j][1] *=2;
-                ids->pxz[i][j][grd->nzn-2] *=2;
-                // pyy
-                ids->pyy[i][j][1] *=2;
-                ids->pyy[i][j][grd->nzn-2] *=2;
-                // pyz
-                ids->pyz[i][j][1] *=2;
-                ids->pyz[i][j][grd->nzn-2] *=2;
-                // pzz
-                ids->pzz[i][j][1] *=2;
-                ids->pzz[i][j][grd->nzn-2] *=2;
-                
-                
-            }
-    } // end of non X periodic
-    
-    
+/** method to calculate the square norm of a vector */
+double norm2(FPfield ***vect, int nx, int ny) {
+  double result = 0;
+  for (int i = 0; i < nx; i++)
+    for (int j = 0; j < ny; j++)
+      result += vect[i][j][0] * vect[i][j][0];
+  return (result);
+}
+/** method to calculate the square norm of a vector */
+double norm2(FPfield *vect, int nx) {
+  double result = 0;
+  for (int i = 0; i < nx; i++)
+    result += vect[i] * vect[i];
+  return (result);
 }
 
 
 
+/** method to calculate the parallel dot product */
+double norm2P(FPfield ***vect, int nx, int ny, int nz) {
+  double result = 0;
+  double local_result = 0;
+  for (int i = 0; i < nx; i++)
+    for (int j = 0; j < ny; j++)
+      for (int k = 0; k < nz; k++)
+        local_result += vect[i][j][k] * vect[i][j][k];
+
+  // MPI_Allreduce(&local_result, &result, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  result = local_result;
+  return (result);
+}
+/** method to calculate the parallel norm of a vector on different processors with the ghost cell */
+double norm2P(FPfield *vect, int n) {
+  double result = 0;
+  double local_result = 0;
+  for (int i = 0; i < n; i++)
+    local_result += vect[i] * vect[i];
+  //MPI_Allreduce(&local_result, &result, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  result = local_result;
+  return (result);
+}
+/** method to calculate the parallel norm of a vector on different processors with the gost cell*/
+double normP(FPfield *vect, int n) {
+  FPfield result = 0.0;
+  FPfield local_result = 0.0;
+  for (register int i = 0; i < n; i++)
+    local_result += vect[i] * vect[i];
 
 
+  //MPI_Allreduce(&local_result, &result, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  result = local_result;
+  return (sqrt(result));
+
+}
+/** method to calculate the difference of two vectors*/
+void sub(FPfield *res, FPfield *vect1, FPfield *vect2, int n) {
+  for (register int i = 0; i < n; i++)
+    res[i] = vect1[i] - vect2[i];
+}
+/** method to calculate the sum of two vectors vector1 = vector1 + vector2*/
+void sum(FPfield *vect1, FPfield *vect2, int n) {
+  for (register int i = 0; i < n; i++)
+    vect1[i] += vect2[i];
 
 
-//////////
-// POPULATE GHOST CELL ON CELL CENTERS
-//////////
+}
+/** method to calculate the sum of two vectors vector1 = vector1 + vector2*/
+void sum(FPfield  ***vect1, FPfield ***vect2, int nx, int ny, int nz) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect1[i][j][k] += vect2[i][j][k];
+}
+
+/** method to calculate the sum of two vectors vector1 = vector1 + vector2*/
+void sum(FPfield  ***vect1, FPfield  ***vect2, int nx, int ny) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      vect1[i][j][0] += vect2[i][j][0];
+}
+
+/** method to calculate the sum of two vectors vector1 = vector1 + vector2*/
+void sum(FPfield  ***vect1, FPfield ****vect2, int nx, int ny, int nz, int ns) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect1[i][j][k] += vect2[ns][i][j][k];
+}
+
+/** method to calculate the sum of two vectors vector1 = vector1 + vector2*/
+void sum(FPfield  ***vect1, FPfield  ****vect2, int nx, int ny, int ns) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      vect1[i][j][0] += vect2[ns][i][j][0];
+}
+/** method to calculate the subtraction of two vectors vector1 = vector1 - vector2*/
+void sub(FPfield ***vect1, FPfield ***vect2, int nx, int ny, int nz) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect1[i][j][k] -= vect2[i][j][k];
 
 
-/** Apply BC to scalar interp quantity defined on nodes - Interpolation quantity */
-void applyBCscalarDensC(FPinterp*** scalarC, grid* grd, parameters* param){
-    
-    
-    ///////////////////////
-    ///
-    ///    FACE
-    ///
-    
-    
-    // X direction
-    if (param->PERIODICX==true){
-        for (register int j = 1; j < grd->nyc-1; j++)
-            for (register int k = 1; k < grd->nzc-1; k++){
-                scalarC[0][j][k] = scalarC[grd->nxc-2][j][k];
-                scalarC[grd->nxc-1][j][k] = scalarC[1][j][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Y direction
-    if (param->PERIODICY==true){
-        for (register int i = 1; i < grd->nxc - 1; i++)
-            for (register int k = 1; k < grd->nzc - 1; k++){
-                
-                // rhon
-                scalarC[i][0][k] = scalarC[i][grd->nyc-2][k];
-                scalarC[i][grd->nyc-1][k] = scalarC[i][1][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Z direction
-    if (param->PERIODICZ==true){
-        for (register int i = 1; i < grd->nxc - 1; i++)
-            for (register int j = 1; j < grd->nyc - 1; j++){
-                
-                // rhon
-                scalarC[i][j][0] = scalarC[i][j][grd->nzc-2];
-                scalarC[i][j][grd->nzc-1] = scalarC[i][j][1];
-                
-            }
-    }
-    
-    ///////////////////////
-    ///
-    ///    EDGES
-    ///
-    
-    // X-EDGE
-    if (param->PERIODICY==true || param->PERIODICZ== true){
-        for(register int i=1; i < (grd->nxc - 1); i++){
-            scalarC[i][grd->nyc-1][grd->nzc-1] = scalarC[i][1][1];
-            scalarC[i][0][0]       = scalarC[i][grd->nyc-2][grd->nzc-2];
-            scalarC[i][0][grd->nzc-1]    = scalarC[i][grd->nyc-2][1];
-            scalarC[i][grd->nyc-1][0]    = scalarC[i][1][grd->nzc-2];
-        }
-    }
-    
-    // Y-EDGE
-    if (param->PERIODICX==true || param->PERIODICZ== true){
-        for(register int i=1; i < (grd->nyn - 1); i++){
-            scalarC[grd->nxc-1][i][grd->nzc-1] = scalarC[1][i][1];
-            scalarC[0][i][0]       =  scalarC[grd->nxc-2][i][grd->nzc-2];
-            scalarC[0][i][grd->nzc-1]   = scalarC[grd->nxc-2][i][1];
-            scalarC[grd->nxc-1][i][0] = scalarC[1][i][grd->nzc-2];
-        }
-    }
-    
-    // Z-EDGE
-    if (param->PERIODICX==true || param->PERIODICY== true){
-        for(register int i=1; i < (grd->nzc - 1); i++){
-            scalarC[grd->nxc-1][grd->nyc-1][i] = scalarC[1][1][i];
-            scalarC[0][0][i]       = scalarC[grd->nxc-2][grd->nyc-2][i];
-            scalarC[grd->nxc-1][0][i]  = scalarC[1][grd->nyc-2][i];
-            scalarC[0][grd->nyc-1][i]  = scalarC[grd->nxc-2][1][i];
-        }
-    }
-    
-    
-    // Corners
-    if (param->PERIODICX==true || param->PERIODICY==true || param->PERIODICZ==true){
-        
-        scalarC[grd->nxc-1][grd->nyc-1][grd->nzc-1]     = scalarC[1][1][1];
-        scalarC[0][grd->nyc-1][grd->nzc-1]              = scalarC[grd->nxc-2][1][1];
-        scalarC[grd->nxc-1][0][grd->nzc-1]              = scalarC[1][grd->nyc-2][1];
-        scalarC[0][0][grd->nzc-1]                       = scalarC[grd->nxc-2][grd->nyc-2][1];
-        scalarC[grd->nxc-1][grd->nyc-1][0]              = scalarC[1][1][grd->nzc-2];
-        scalarC[0][grd->nyc-1][0]                       = scalarC[grd->nxc-2][1][grd->nzc-2];
-        scalarC[grd->nxc-1][0][0]                       = scalarC[1][grd->nyc-2][grd->nzc-2];
-        scalarC[0][0][0]                                = scalarC[grd->nxc-2][grd->nyc-2][grd->nzc-2];
-        
-    }
-    
-    // FACE NON PERIODIC: PUT Neuman condition absence of something else
-    // X direction
-    if (param->PERIODICX==false){
-        for (register int j = 1; j < grd->nyc-1; j++)
-            for (register int k = 1; k < grd->nzc-1; k++){
-                scalarC[0][j][k] = scalarC[1][j][k];
-                scalarC[grd->nxc-1][j][k] = scalarC[grd->nxc-2][j][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Y direction
-    if (param->PERIODICY==false){
-        for (register int i = 1; i < grd->nxc - 1; i++)
-            for (register int k = 1; k < grd->nzc - 1; k++){
-                scalarC[i][0][k] = scalarC[i][1][k] ;
-                scalarC[i][grd->nyc-1][k] = scalarC[i][grd->nyc-2][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Z direction
-    if (param->PERIODICZ==false){
-        for (register int i = 1; i < grd->nxc - 1; i++)
-            for (register int j = 1; j < grd->nyc - 1; j++){
-                scalarC[i][j][0] = scalarC[i][j][1] ;
-                scalarC[i][j][grd->nzc-1] = scalarC[i][j][grd->nzc-2];
-            }
-    }
+}
+
+/** method to calculate the subtraction of two vectors vector1 = vector1 - vector2*/
+void sub(FPfield ***vect1, FPfield ***vect2, int nx, int ny) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      vect1[i][j][0] -= vect2[i][j][0];
+
+
 }
 
 
+/** method to sum 4 vectors vector1 = alfa*vector1 + beta*vector2 + gamma*vector3 + delta*vector4 */
+void sum4(double ***vect1, double alfa, double ***vect2, double beta, double ***vect3, double gamma, double ***vect4, double delta, double ***vect5, int nx, int ny, int nz) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect1[i][j][k] = alfa * (vect2[i][j][k] + beta * vect3[i][j][k] + gamma * vect4[i][j][k] + delta * vect5[i][j][k]);
 
-
-/** Apply BC to scalar field quantity defined on center - Interpolation quantity */
-void applyBCscalarFieldC(FPfield*** scalarC, grid* grd, parameters* param){
-    ///////////////////////
-    ///
-    ///    FACE
-    ///
-    
-    
-    // X direction
-    if (param->PERIODICX==true){
-        for (register int j = 1; j < grd->nyc-1; j++)
-            for (register int k = 1; k < grd->nzc-1; k++){
-                scalarC[0][j][k] = scalarC[grd->nxc-2][j][k];
-                scalarC[grd->nxc-1][j][k] = scalarC[1][j][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Y direction
-    if (param->PERIODICY==true){
-        for (register int i = 1; i < grd->nxc - 1; i++)
-            for (register int k = 1; k < grd->nzc - 1; k++){
-                
-                // rhon
-                scalarC[i][0][k] = scalarC[i][grd->nyc-2][k];
-                scalarC[i][grd->nyc-1][k] = scalarC[i][1][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Z direction
-    if (param->PERIODICZ==true){
-        for (register int i = 1; i < grd->nxc - 1; i++)
-            for (register int j = 1; j < grd->nyc - 1; j++){
-                
-                // rhon
-                scalarC[i][j][0] = scalarC[i][j][grd->nzc-2];
-                scalarC[i][j][grd->nzc-1] = scalarC[i][j][1];
-                
-            }
-    }
-    
-    ///////////////////////
-    ///
-    ///    EDGES
-    ///
-    
-    // X-EDGE
-    if (param->PERIODICY==true || param->PERIODICZ== true){
-        for(register int i=1; i < (grd->nxc - 1); i++){
-            scalarC[i][grd->nyc-1][grd->nzc-1] = scalarC[i][1][1];
-            scalarC[i][0][0]       = scalarC[i][grd->nyc-2][grd->nzc-2];
-            scalarC[i][0][grd->nzc-1]    = scalarC[i][grd->nyc-2][1];
-            scalarC[i][grd->nyc-1][0]    = scalarC[i][1][grd->nzc-2];
-        }
-    }
-    
-    // Y-EDGE
-    if (param->PERIODICX==true || param->PERIODICZ== true){
-        for(register int i=1; i < (grd->nyn - 1); i++){
-            scalarC[grd->nxc-1][i][grd->nzc-1] = scalarC[1][i][1];
-            scalarC[0][i][0]       =  scalarC[grd->nxc-2][i][grd->nzc-2];
-            scalarC[0][i][grd->nzc-1]   = scalarC[grd->nxc-2][i][1];
-            scalarC[grd->nxc-1][i][0] = scalarC[1][i][grd->nzc-2];
-        }
-    }
-    
-    // Z-EDGE
-    if (param->PERIODICX==true || param->PERIODICY== true){
-        for(register int i=1; i < (grd->nzc - 1); i++){
-            scalarC[grd->nxc-1][grd->nyc-1][i] = scalarC[1][1][i];
-            scalarC[0][0][i]       = scalarC[grd->nxc-2][grd->nyc-2][i];
-            scalarC[grd->nxc-1][0][i]  = scalarC[1][grd->nyc-2][i];
-            scalarC[0][grd->nyc-1][i]  = scalarC[grd->nxc-2][1][i];
-        }
-    }
-    
-    
-    // Corners
-    if (param->PERIODICX==true || param->PERIODICY==true || param->PERIODICZ==true){
-        
-        scalarC[grd->nxc-1][grd->nyc-1][grd->nzc-1]     = scalarC[1][1][1];
-        scalarC[0][grd->nyc-1][grd->nzc-1]              = scalarC[grd->nxc-2][1][1];
-        scalarC[grd->nxc-1][0][grd->nzc-1]              = scalarC[1][grd->nyc-2][1];
-        scalarC[0][0][grd->nzc-1]                       = scalarC[grd->nxc-2][grd->nyc-2][1];
-        scalarC[grd->nxc-1][grd->nyc-1][0]              = scalarC[1][1][grd->nzc-2];
-        scalarC[0][grd->nyc-1][0]                       = scalarC[grd->nxc-2][1][grd->nzc-2];
-        scalarC[grd->nxc-1][0][0]                       = scalarC[1][grd->nyc-2][grd->nzc-2];
-        scalarC[0][0][0]                                = scalarC[grd->nxc-2][grd->nyc-2][grd->nzc-2];
-        
-    }
-    
-    // FACE NON PERIODIC: PUT Neuman condition absence of something else
-    // X direction
-    if (param->PERIODICX==false){
-        for (register int j = 1; j < grd->nyc-1; j++)
-            for (register int k = 1; k < grd->nzc-1; k++){
-                scalarC[0][j][k] = scalarC[1][j][k];
-                scalarC[grd->nxc-1][j][k] = scalarC[grd->nxc-2][j][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Y direction
-    if (param->PERIODICY==false){
-        for (register int i = 1; i < grd->nxc - 1; i++)
-            for (register int k = 1; k < grd->nzc - 1; k++){
-                scalarC[i][0][k] = scalarC[i][1][k] ;
-                scalarC[i][grd->nyc-1][k] = scalarC[i][grd->nyc-2][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Z direction
-    if (param->PERIODICZ==false){
-        for (register int i = 1; i < grd->nxc - 1; i++)
-            for (register int j = 1; j < grd->nyc - 1; j++){
-                scalarC[i][j][0] = scalarC[i][j][1] ;
-                scalarC[i][j][grd->nzc-1] = scalarC[i][j][grd->nzc-2];
-            }
-    }
-    
-    
-    
-    
+}
+/** method to calculate the scalar-vector product */
+void scale(FPfield *vect, FPfield  alfa, int n) {
+  for (register int i = 0; i < n; i++)
+    vect[i] *= alfa;
 }
 
-/** Apply BC to scalar field quantity defined on nodes - Interpolation quantity */
-// set to zero ghost cell
-void applyBCscalarFieldCzero(FPfield*** scalarC, grid* grd, parameters* param){
-    
-    ///////////////////////
-    ///
-    ///    FACE
-    ///
-    
-    
-    // X direction
-    if (param->PERIODICX==true){
-        for (register int j = 1; j < grd->nyc-1; j++)
-            for (register int k = 1; k < grd->nzc-1; k++){
-                scalarC[0][j][k] = scalarC[grd->nxc-2][j][k];
-                scalarC[grd->nxc-1][j][k] = scalarC[1][j][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Y direction
-    if (param->PERIODICY==true){
-        for (register int i = 1; i < grd->nxc - 1; i++)
-            for (register int k = 1; k < grd->nzc - 1; k++){
-                
-                // rhon
-                scalarC[i][0][k] = scalarC[i][grd->nyc-2][k];
-                scalarC[i][grd->nyc-1][k] = scalarC[i][1][k];
-            }
-    }
-    
-    // Periodic boundary conditions in Z direction
-    if (param->PERIODICZ==true){
-        for (register int i = 1; i < grd->nxc - 1; i++)
-            for (register int j = 1; j < grd->nyc - 1; j++){
-                
-                // rhon
-                scalarC[i][j][0] = scalarC[i][j][grd->nzc-2];
-                scalarC[i][j][grd->nzc-1] = scalarC[i][j][1];
-                
-            }
-    }
-    
-    ///////////////////////
-    ///
-    ///    EDGES
-    ///
-    
-    // X-EDGE
-    if (param->PERIODICY==true || param->PERIODICZ== true){
-        for(register int i=1; i < (grd->nxc - 1); i++){
-            scalarC[i][grd->nyc-1][grd->nzc-1] = scalarC[i][1][1];
-            scalarC[i][0][0]       = scalarC[i][grd->nyc-2][grd->nzc-2];
-            scalarC[i][0][grd->nzc-1]    = scalarC[i][grd->nyc-2][1];
-            scalarC[i][grd->nyc-1][0]    = scalarC[i][1][grd->nzc-2];
-        }
-    }
-    
-    // Y-EDGE
-    if (param->PERIODICX==true || param->PERIODICZ== true){
-        for(register int i=1; i < (grd->nyn - 1); i++){
-            scalarC[grd->nxc-1][i][grd->nzc-1] = scalarC[1][i][1];
-            scalarC[0][i][0]       =  scalarC[grd->nxc-2][i][grd->nzc-2];
-            scalarC[0][i][grd->nzc-1]   = scalarC[grd->nxc-2][i][1];
-            scalarC[grd->nxc-1][i][0] = scalarC[1][i][grd->nzc-2];
-        }
-    }
-    
-    // Z-EDGE
-    if (param->PERIODICX==true || param->PERIODICY== true){
-        for(register int i=1; i < (grd->nzc - 1); i++){
-            scalarC[grd->nxc-1][grd->nyc-1][i] = scalarC[1][1][i];
-            scalarC[0][0][i]       = scalarC[grd->nxc-2][grd->nyc-2][i];
-            scalarC[grd->nxc-1][0][i]  = scalarC[1][grd->nyc-2][i];
-            scalarC[0][grd->nyc-1][i]  = scalarC[grd->nxc-2][1][i];
-        }
-    }
-    
-    
-    // Corners
-    if (param->PERIODICX==true || param->PERIODICY==true || param->PERIODICZ==true){
-        
-        scalarC[grd->nxc-1][grd->nyc-1][grd->nzc-1]     = scalarC[1][1][1];
-        scalarC[0][grd->nyc-1][grd->nzc-1]              = scalarC[grd->nxc-2][1][1];
-        scalarC[grd->nxc-1][0][grd->nzc-1]              = scalarC[1][grd->nyc-2][1];
-        scalarC[0][0][grd->nzc-1]                       = scalarC[grd->nxc-2][grd->nyc-2][1];
-        scalarC[grd->nxc-1][grd->nyc-1][0]              = scalarC[1][1][grd->nzc-2];
-        scalarC[0][grd->nyc-1][0]                       = scalarC[grd->nxc-2][1][grd->nzc-2];
-        scalarC[grd->nxc-1][0][0]                       = scalarC[1][grd->nyc-2][grd->nzc-2];
-        scalarC[0][0][0]                                = scalarC[grd->nxc-2][grd->nyc-2][grd->nzc-2];
-        
-    }
-    
-    // FACE NON PERIODIC: PUT Neuman condition absence of something else
-    // X direction
-    if (param->PERIODICX==false){
-        for (register int j = 1; j < grd->nyc-1; j++)
-            for (register int k = 1; k < grd->nzc-1; k++){
-                scalarC[0][j][k] = 0.0;
-                scalarC[grd->nxc-1][j][k] = 0.0;
-            }
-    }
-    
-    // Periodic boundary conditions in Y direction
-    if (param->PERIODICY==false){
-        for (register int i = 1; i < grd->nxc - 1; i++)
-            for (register int k = 1; k < grd->nzc - 1; k++){
-                scalarC[i][0][k] = 0.0;
-                scalarC[i][grd->nyc-1][k] = 0.0;
-            }
-    }
-    
-    // Periodic boundary conditions in Z direction
-    if (param->PERIODICZ==false){
-        for (register int i = 1; i < grd->nxc - 1; i++)
-            for (register int j = 1; j < grd->nyc - 1; j++){
-                scalarC[i][j][0] = 0.0;
-                scalarC[i][j][grd->nzc-1] = 0.0;
-            }
-    }
+/** method to calculate the scalar-vector product */
+void scale(FPfield  ***vect, FPfield  alfa, int nx, int ny) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      vect[i][j][0] *= alfa;
+}
+
+
+/** method to calculate the scalar-vector product */
+void scale(FPfield  ***vect, FPfield alfa, int nx, int ny, int nz) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect[i][j][k] *= alfa;
+}
+/** method to calculate the scalar product */
+void scale(double vect[][2][2], double alfa, int nx, int ny, int nz) {
+  for (int i = 0; i < nx; i++)
+    for (int j = 0; j < ny; j++)
+      for (int k = 0; k < nz; k++)
+        vect[i][j][k] *= alfa;
+}
+/** method to calculate the scalar-vector product */
+void scale(FPfield  ***vect1, FPfield ***vect2, FPfield  alfa, int nx, int ny, int nz) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect1[i][j][k] = vect2[i][j][k] * alfa;
+}
+
+/** method to calculate the scalar-vector product */
+void scale(FPfield  ***vect1, FPfield  ***vect2, double alfa, int nx, int ny) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      vect1[i][j][0] = vect2[i][j][0] * alfa;
+}
+
+/** method to calculate the scalar-vector product */
+void scale(FPfield *vect1, FPfield *vect2, double alfa, int n) {
+  for (register int i = 0; i < n; i++)
+    vect1[i] = vect2[i] * alfa;
+}
+
+/** method to calculate vector1 = vector1 + alfa*vector2   */
+void addscale(FPfield alfa, FPfield ***vect1, FPfield ***vect2, int nx, int ny, int nz) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect1[i][j][k] = vect1[i][j][k] + alfa * vect2[i][j][k];
+}
+/** add scale for weights */
+void addscale(double alfa, double vect1[][2][2], double vect2[][2][2], int nx, int ny, int nz) {
+  for (int i = 0; i < nx; i++)
+    for (int j = 0; j < ny; j++)
+      for (int k = 0; k < nz; k++)
+        vect1[i][j][k] = vect1[i][j][k] + alfa * vect2[i][j][k];
+
+}
+/** method to calculate vector1 = vector1 + alfa*vector2   */
+void addscale(FPfield alfa, FPfield ***vect1, FPfield ***vect2, int nx, int ny) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      vect1[i][j][0] += alfa * vect2[i][j][0];
+}
+/** method to calculate vector1 = vector1 + alfa*vector2   */
+void addscale(FPfield alfa, FPfield *vect1, FPfield *vect2, int n) {
+  for (register int i = 0; i < n; i++)
+    vect1[i] += alfa * vect2[i];
+
+}
+/** method to calculate vector1 = beta*vector1 + alfa*vector2   */
+void addscale(FPfield alfa, FPfield beta, FPfield *vect1, FPfield *vect2, int n) {
+  for (register int i = 0; i < n; i++)
+    vect1[i] = vect1[i] * beta + alfa * vect2[i];
+
+}
+/** method to calculate vector1 = beta*vector1 + alfa*vector2 */
+void addscale(FPfield alfa, FPfield beta, FPfield ***vect1, FPfield ***vect2, int nx, int ny, int nz) {
+
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++) {
+        vect1[i][j][k] = beta * vect1[i][j][k] + alfa * vect2[i][j][k];
+      }
+
+}
+/** method to calculate vector1 = beta*vector1 + alfa*vector2 */
+void addscale(double alfa, double beta, double ***vect1, double ***vect2, int nx, int ny) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      vect1[i][j][0] = beta * vect1[i][j][0] + alfa * vect2[i][j][0];
+
+}
+
+
+/** method to calculate vector1 = alfa*vector2 + beta*vector3 */
+void scaleandsum(double ***vect1, double alfa, double beta, double ***vect2, double ***vect3, int nx, int ny, int nz) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect1[i][j][k] = alfa * vect2[i][j][k] + beta * vect3[i][j][k];
+}
+/** method to calculate vector1 = alfa*vector2 + beta*vector3 with vector2 depending on species*/
+void scaleandsum(double ***vect1, double alfa, double beta, double ****vect2, double ***vect3, int ns, int nx, int ny, int nz) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect1[i][j][k] = alfa * vect2[ns][i][j][k] + beta * vect3[i][j][k];
+}
+/** method to calculate vector1 = alfa*vector2*vector3 with vector2 depending on species*/
+void prod(double ***vect1, double alfa, double ****vect2, int ns, double ***vect3, int nx, int ny, int nz) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect1[i][j][k] = alfa * vect2[ns][i][j][k] * vect3[i][j][k];
+
+}
+/** method to calculate vect1 = vect2/alfa */
+void div(double ***vect1, double alfa, double ***vect2, int nx, int ny, int nz) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect1[i][j][k] = vect2[i][j][k] / alfa;
+
+}
+void prod6(double ***vect1, double ***vect2, double ***vect3, double ***vect4, double ***vect5, double ***vect6, double ***vect7, int nx, int ny, int nz) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect1[i][j][k] = vect2[i][j][k] * vect3[i][j][k] + vect4[i][j][k] * vect5[i][j][k] + vect6[i][j][k] * vect7[i][j][k];
+}
+/** method used for calculating PI */
+void proddiv(double ***vect1, double ***vect2, double alfa, double ***vect3, double ***vect4, double ***vect5, double ***vect6, double beta, double ***vect7, double ***vect8, double gamma, double ***vect9, int nx, int ny, int nz) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect1[i][j][k] = (vect2[i][j][k] + alfa * (vect3[i][j][k] * vect4[i][j][k] - vect5[i][j][k] * vect6[i][j][k]) + beta * vect7[i][j][k] * vect8[i][j][k]) / (1 + gamma * vect9[i][j][k]);
+
+  // questo mi convince veramente poco!!!!!!!!!!!!!! CAZZO!!!!!!!!!!!!!!!!!!
+  // ***vect1++ = (***vect2++ + alfa*((***vect3++)*(***vect4++) - (***vect5++)*(***vect6++)) + beta*(***vect7++)*(***vect8++))/(1+gamma*(***vect9++));
+}
+/** method to calculate the opposite of a vector */
+void neg(FPfield ***vect, int nx, int ny, int nz) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect[i][j][k] = -vect[i][j][k];
+
+
+}
+
+/** method to calculate the opposite of a vector */
+void neg(FPfield ***vect, int nx, int ny) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      vect[i][j][0] = -vect[i][j][0];
+}
+/** method to calculate the opposite of a vector */
+void neg(FPfield ***vect, int nx) {
+  for (register int i = 0; i < nx; i++)
+    vect[i][0][0] = -vect[i][0][0];
+}
+/** method to calculate the opposite of a vector */
+void neg(FPfield *vect, int n) {
+  for (register int i = 0; i < n; i++)
+    vect[i] = -vect[i];
+
+
+}
+/** method to set equal two vectors */
+void eq(double ***vect1, double ***vect2, int nx, int ny, int nz) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect1[i][j][k] = vect2[i][j][k];
+
+}
+/** method to set equal two vectors */
+void eq(double ***vect1, double ***vect2, int nx, int ny) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      vect1[i][j][0] = vect2[i][j][0];
+
+}
+
+/** method to set equal two vectors */
+void eq(double ****vect1, double ***vect2, int nx, int ny, int is) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      vect1[is][i][j][0] = vect2[i][j][0];
+
+}
+/** method to set equal two vectors */
+void eq(double ****vect1, double ***vect2, int nx, int ny, int nz, int is) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect1[is][i][j][k] = vect2[i][j][k];
+
+}
+
+void eq(double *vect1, double *vect2, int n) {
+  for (register int i = 0; i < n; i++)
+    vect1[i] = vect2[i];
+}
+/** method to set a vector to a Value */
+void eqValue(FPfield value, FPfield ***vect, int nx, int ny, int nz) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      for (register int k = 0; k < nz; k++)
+        vect[i][j][k] = value;
+
+}
+void eqValue(double value, double vect[][2][2], int nx, int ny, int nz) {
+  for (int i = 0; i < nx; i++)
+    for (int j = 0; j < ny; j++)
+      for (int k = 0; k < nz; k++)
+        vect[i][j][k] = value;
+
+}
+/** method to set a vector to a Value */
+void eqValue(double value, double ***vect, int nx, int ny) {
+  for (register int i = 0; i < nx; i++)
+    for (register int j = 0; j < ny; j++)
+      vect[i][j][0] = value;
+
+}
+/** method to set a vector to a Value */
+void eqValue(double value, double ***vect, int nx) {
+  for (register int i = 0; i < nx; i++)
+    vect[i][0][0] = value;
+
+}
+/** method to set a vector to a Value */
+void eqValue(FPfield value, FPfield *vect, int n) {
+  for (register int i = 0; i < n; i++)
+    vect[i] = value;
+}
+/** method to put a column in a matrix 2D */
+void putColumn(FPfield **Matrix, FPfield *vect, int column, int n) {
+  for (int i = 0; i < n; i++)
+    Matrix[i][column] = vect[i];
+
+}
+/** method to get a column in a matrix 2D */
+void getColumn(FPfield *vect, FPfield **Matrix, int column, int n) {
+  for (int i = 0; i < n; i++)
+    vect[i] = Matrix[i][column];
+}
+/** RIFAI QUESTA PARTE questo e' la tomba delle performance*/
+void MODULO(double *x, double L) {
+  *x = *x - floor(*x / L) * L;
+
+}
+/** method to calculate the epsilon machine */
+double eps() {
+  double eps;
+  int i = 1;
+  double num = 1;
+  double newsum = 1;
+  double oldsum = 1;
+  while (true) {
+    num = num / (2 * i);
+    newsum += num;
+    if (newsum == oldsum)
+      break;
+    oldsum = newsum;
+    i++;
+  }
+  eps = num * 2;
+  return (eps);
 }
